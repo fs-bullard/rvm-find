@@ -54,6 +54,7 @@ class BaseRVM(BaseEstimator):
         bias_used=True,
         verbose=True,
         verb_freq=10,
+        standardise=False
     ):
         """Copy params to object properties, no validation."""
         self.n_iter = n_iter
@@ -65,6 +66,7 @@ class BaseRVM(BaseEstimator):
         self.bias_used = bias_used
         self.verbose = verbose
         self.verb_freq = verb_freq
+        self.standardise = standardise
 
     def get_params(self, deep=True):
         """Return parameters as a dictionary."""
@@ -77,7 +79,8 @@ class BaseRVM(BaseEstimator):
             'beta_fixed': self.beta_fixed,
             'bias_used': self.bias_used,
             'verbose': self.verbose,
-            'verbose_frequency': self.verb_freq
+            'verbose_frequency': self.verb_freq,
+            'standardise': self.standardise
         }
         return params
 
@@ -113,8 +116,12 @@ class BaseRVM(BaseEstimator):
         self.phi = self.phi[ :, keep_alpha ]
         self.sigma_ = self.sigma_[ np.ix_( keep_alpha, keep_alpha ) ]
         self.m_ = self.m_[ keep_alpha ]
+        
+        if self.standardise :
+            self.mu_x = self.mu_x[ keep_alpha ]
+            self.si_x = self.si_x[ keep_alpha ]
 
-    def fit(self, X, y, X_labels ):
+    def fit(self, X, y, X_labels, standardise=False ):
         """Fit the RVR to the training data.
         
         X: 2D array where each row is an observation and 
@@ -126,21 +133,35 @@ class BaseRVM(BaseEstimator):
                   of each basis function e.g. d2u/dx2.
         
         """
+        self.standardise = standardise
+        
         X, y = check_X_y(X, y)
-
+        
+        if standardise :
+            
+            self.mu_x = np.mean( X, axis=0 )
+            self.si_x = np.std( X, axis=0 )
+            
+            X -= np.tile( self.mu_x, X.shape[0] ).reshape( X.shape )
+            X /= np.tile( self.si_x, X.shape[0] ).reshape( X.shape )
+            
         n_samples, n_features = X.shape
         
         # if using a bias, then add label
         if self.bias_used : 
 			
-			X_labels.append('1')
+            X_labels.append('1')
 			
-			self.phi = np.zeros( (n_samples,n_features+1) )
-			self.phi[:,:n_features] = X
-			self.phi[:,-1] = 1           # bias
+            self.phi = np.zeros( (n_samples,n_features+1) )
+            self.phi[:,:n_features] = X
+            self.phi[:,-1] = 1           # bias
+            
+            if standardise :
+                self.mu_x = np.append( list( self.mu_x ), [1] )
+                self.si_x = np.append( list( self.si_x ), [0] )
 			
         else :
-			self.phi = X
+            self.phi = X
         
         self.labels = np.array( X_labels )
 
@@ -189,6 +210,10 @@ class BaseRVM(BaseEstimator):
             if delta < self.tol and i > 1 :
                 print "Fit: delta < tol @ iteration {}, finished.".format(i)
                 print "Fit: weights {}".format(self.m_)
+                
+                if standardise :
+                    print "Fit: weights (rescaled) {}".format( self.m_ / self.si_x )
+                
                 break
 
             self.alpha_old = self.alpha_
