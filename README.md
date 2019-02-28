@@ -1,6 +1,6 @@
 
 # Project: rvm-find
------
+
 
 Using the relevance vector machine (RVM) for data-driven discovery of PDEs, as in "Robust data-driven discovery of governing physical laws with error bars", Zhang and Lin (2018).
 
