@@ -1,10 +1,14 @@
 ##########
-rvm-find
+Project: rvm-find
 ##########
 
 Using the relevance vector machine (RVM) for data-driven discovery of PDEs, as in "Robust data-driven discovery of governing physical laws with error bars", Zhang and Lin (2018).
 
 Code forked and adapted from JamesRitchie/scikit-rvm.
+
+Given some spatio-temporal dataset, can we find the governing PDE from a library of candidate terms?
+
+From the library of candidate terms- referred to as basis functions in the RVM code -the RVM constructs a sparse regression using type-2 maximum likelihood on the hyperpriors on each regression weight.
 
 ======
 Theory
