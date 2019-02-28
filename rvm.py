@@ -77,6 +77,7 @@ class BaseRVM(BaseEstimator):
             'beta_fixed': self.beta_fixed,
             'bias_used': self.bias_used,
             'verbose': self.verbose
+            'verbose_frequency': self.verb_freq
         }
         return params
 
@@ -91,6 +92,9 @@ class BaseRVM(BaseEstimator):
         
         As alpha becomes very large, the corresponding 
         weight of the basis function tends to zero.
+        
+        Only keep basis functions which have an alpha 
+        value less than the threshold.
         """
         keep_alpha = self.alpha_ < self.threshold_alpha
 
@@ -100,19 +104,16 @@ class BaseRVM(BaseEstimator):
             if self.bias_used:
                 keep_alpha[-1] = True
 
-        if self.bias_used:
-            if not keep_alpha[-1]:
-                self.bias_used = False
-            self.relevance_ = self.relevance_[keep_alpha[:-1]]
-        else:
-            self.relevance_ = self.relevance_[keep_alpha]
+        self.relevance_ = self.relevance_[ keep_alpha ]
+        self.labels = self.labels[ keep_alpha ]
 
-        self.alpha_ = self.alpha_[keep_alpha]
-        self.alpha_old = self.alpha_old[keep_alpha]
-        self.gamma = self.gamma[keep_alpha]
-        self.phi = self.phi[:, keep_alpha]
-        self.sigma_ = self.sigma_[np.ix_(keep_alpha, keep_alpha)]
-        self.m_ = self.m_[keep_alpha]
+		# prune all parameters to new set of basis functions
+        self.alpha_ = self.alpha_[ keep_alpha ]
+        self.alpha_old = self.alpha_old[ keep_alpha ]
+        self.gamma = self.gamma[ keep_alpha ]
+        self.phi = self.phi[ :, keep_alpha ]
+        self.sigma_ = self.sigma_[ np.ix_( keep_alpha, keep_alpha ) ]
+        self.m_ = self.m_[ keep_alpha ]
 
     def fit(self, X, y, X_labels ):
         """Fit the RVR to the training data.
@@ -129,9 +130,20 @@ class BaseRVM(BaseEstimator):
         X, y = check_X_y(X, y)
 
         n_samples, n_features = X.shape
-
-        self.phi = X
-        self.labels = X_labels
+        
+        # if using a bias, then add label
+        if self.bias_used : 
+			
+			X_labels.append('1')
+			
+			self.phi = np.zeros( (n_samples,n_features+1) )
+			self.phi[:,:n_features] = X
+			self.phi[:,-1] = 1           # bias
+			
+		else :
+			self.phi = X
+        
+        self.labels = np.array( X_labels )
 
         n_basis_functions = self.phi.shape[1]
 
@@ -146,37 +158,36 @@ class BaseRVM(BaseEstimator):
         self.alpha_old = self.alpha_
 
         for i in range(self.n_iter):
+			
             self._posterior()
 
-            self.gamma = 1 - self.alpha_*np.diag(self.sigma_)
-            self.alpha_ = self.gamma/(self.m_ ** 2)
+            self.gamma = 1 - self.alpha_ * np.diag( self.sigma_ )
+            self.alpha_ = self.gamma / ( self.m_ ** 2 )
 
             if not self.beta_fixed:
-                self.beta_ = (n_samples - np.sum(self.gamma))/(
-                    np.sum((y - np.dot(self.phi, self.m_)) ** 2))
+                self.beta_ = ( n_samples - np.sum( self.gamma ) ) / (
+                    np.sum( ( y - np.dot( self.phi, self.m_ ) ) ** 2 ) )
 
             self._prune()
 
+			# print results of this iteration
             if self.verbose and ( (i+1) % self.verb_freq == 0 ):
                 print "Fit @ iteration {}:".format(i) 
                 print "--Alpha {}".format( self.alpha_ )
                 print "--Beta {}".format( self.beta_ ) 
                 print "--Gamma {}".format( self.gamma ) 
                 print "--m {}".format( self.m_ ) 
-                print "--Relevance Vectors {}\n".format( self.relevance_.shape[0] ) 
+                print "--# of relevance vectors {} / {}".format( self.relevance_.shape[0], n_basis_functions ) 
+                print "--Remaining candidate terms {}\n".format( list( self.labels ) )
 
-            delta = np.amax(np.absolute(self.alpha_ - self.alpha_old))
+			# check if threshold has been reached
+            delta = np.amax( np.absolute( self.alpha_ - self.alpha_old ) )
 
             if delta < self.tol and i > 1:
                 print "Fit: delta < tol @ iteration {}, finished.".format(i)
                 break
 
             self.alpha_old = self.alpha_
-
-        if self.bias_used:
-            self.bias = self.m_[-1]
-        else:
-            self.bias = None
 
         return self
 
@@ -191,18 +202,18 @@ class RVR(BaseRVM, RegressorMixin):
 
     def _posterior(self):
         """Compute the posterior distriubtion over weights."""
-        i_s = np.diag(self.alpha_) + self.beta_ * np.dot(self.phi.T, self.phi)
+        i_s = np.diag( self.alpha_ ) + self.beta_ * np.dot( self.phi.T, self.phi )
         self.sigma_ = np.linalg.inv(i_s)
-        self.m_ = self.beta_ * np.dot(self.sigma_, np.dot(self.phi.T, self.y))
+        self.m_ = self.beta_ * np.dot( self.sigma_, np.dot( self.phi.T, self.y ) )
 
     def predict(self, X, eval_MSE=False):
         """Evaluate the RVR model at x."""
         phi = X
 
-        y = np.dot(phi, self.m_)
+        y = np.dot( phi, self.m_ )
 
         if eval_MSE:
-            MSE = (1/self.beta_) + np.dot(phi, np.dot(self.sigma_, phi.T))
+            MSE = ( 1/self.beta_ ) + np.dot( phi, np.dot( self.sigma_, phi.T ) )
             return y, MSE[:, 0]
         else:
             return y
