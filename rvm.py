@@ -145,6 +145,12 @@ class BaseRVM(BaseEstimator):
             X -= np.tile( self.mu_x, X.shape[0] ).reshape( X.shape )
             X /= np.tile( self.si_x, X.shape[0] ).reshape( X.shape )
             
+            self.mu_y = np.mean( y )
+            self.si_y = np.std( y )
+            
+            y -= np.tile( self.mu_y, len(y) )
+            y /= np.tile( self.si_y, len(y) )
+            
         n_samples, n_features = X.shape
         
         # if using a bias, then add label
@@ -193,7 +199,7 @@ class BaseRVM(BaseEstimator):
                     np.sum( ( y - np.dot( self.phi, self.m_ ) ) ** 2 ) )
 
             self._prune()
-
+            
 			# print results of this iteration
             if self.verbose and ( (i+1) % self.verb_freq == 0 ):
                 print "Fit @ iteration {}:".format(i) 
@@ -203,14 +209,15 @@ class BaseRVM(BaseEstimator):
                 print "--m {}".format( self.m_ ) 
                 print "--# of relevance vectors {} / {}".format( self.phi.shape[1], n_basis_functions ) 
                 print "--Remaining candidate terms {}\n".format( list( self.labels ) )
-
+              
 			# check if threshold has been reached
             delta = np.amax( np.absolute( self.alpha_ - self.alpha_old ) )
 
             if delta < self.tol and i > 1 :
+                
+                
                 print "Fit: delta < tol @ iteration {}, finished.".format(i)
                 print "Fit: weights {}".format(self.m_)
-                
                 if standardise :
                     print "Fit: weights (rescaled) {}".format( self.m_ / self.si_x )
                 
