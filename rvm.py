@@ -215,12 +215,16 @@ class BaseRVM(BaseEstimator):
 
             if delta < self.tol and i > 1 :
                 
-                
                 print "Fit: delta < tol @ iteration {}, finished.".format(i)
-                print "Fit: weights {}".format(self.m_)
+                print "Fit: weights of each term:"
+                for n, label in enumerate( self.labels ) :
+                    print "{} : {} ".format( label, self.m_[n] )
                 if standardise :
                     print "Fit: weights (rescaled) {}".format( self.m_ / self.si_x )
-                
+                    
+                # make vector indicating which basis functions remain
+                self.retained_ = np.isin( np.array( X_labels ), self.labels )
+            
                 break
 
             self.alpha_old = self.alpha_
@@ -242,16 +246,30 @@ class RVR(BaseRVM, RegressorMixin):
         self.sigma_ = np.linalg.inv(i_s)
         self.m_ = self.beta_ * np.dot( self.sigma_, np.dot( self.phi.T, self.y ) )
 
-    def predict(self, X, eval_MSE=False):
-        """Evaluate the RVR model at x."""
-        phi = X
-
-        y = np.dot( phi, self.m_ )
-
-        if eval_MSE:
-            MSE = ( 1/self.beta_ ) + np.dot( phi, np.dot( self.sigma_, phi.T ) )
-            return y, MSE[:, 0]
-        else:
-            return y
-
+    def post_pred_var(self, X ):
+        """Evaluate the posterior predictive variance
+        of the RVR model for feature data X.
+        
+        For large X arrays, the matrix multiplication
+        below can produce memory errors. Therefore
+        compute the variance individually.
+        
+        The return var is a 1D vector of length equal
+        to the number of data points in X.
+        
+        """
+               
+        # remove basis functions/features that were
+        # pruned during training from X
+        phi = X[:,self.retained_]
+        
+        N_points, N_feat = X.shape        
+        var = np.zeros( (N_points,) )
+        
+        for i in range( N_points ) :
+    
+            var[i] = ( 1/self.beta_ ) + np.dot( phi[i,:], np.dot( self.sigma_, phi[i,:].T ) )
+        
+        return var
+            
 
