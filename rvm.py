@@ -32,6 +32,7 @@ from scipy.optimize import minimize
 from scipy.special import expit
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils.validation import check_X_y
+from sklearn.metrics import r2_score
 
 
 class BaseRVM(BaseEstimator):
@@ -104,8 +105,6 @@ class BaseRVM(BaseEstimator):
         # check if we are chucking away all basis functions
         if not np.any(keep_alpha):
             keep_alpha[0] = True
-            if self.bias_used:
-                keep_alpha[-1] = True
 
         self.labels = self.labels[ keep_alpha ]
 
@@ -137,66 +136,48 @@ class BaseRVM(BaseEstimator):
         
         X, y = check_X_y(X, y)
         
-        if standardise :
-            
-            self.mu_x = np.mean( X, axis=0 )
-            self.si_x = np.std( X, axis=0 )
-            
-            X -= np.tile( self.mu_x, X.shape[0] ).reshape( X.shape )
-            X /= np.tile( self.si_x, X.shape[0] ).reshape( X.shape )
-            
-            self.mu_y = np.mean( y )
-            self.si_y = np.std( y )
-            
-            y -= np.tile( self.mu_y, len(y) )
-            y /= np.tile( self.si_y, len(y) )
-            
-        n_samples, n_features = X.shape
+        n_samples, n_basis_functions = X.shape
         
-        # if using a bias, then add label
-        if self.bias_used : 
-			
-            X_labels.append('1')
-			
-            self.phi = np.zeros( (n_samples,n_features+1) )
-            self.phi[:,:n_features] = X
-            self.phi[:,-1] = 1           # bias
-            
-            if standardise :
-                self.mu_x = np.append( list( self.mu_x ), [1] )
-                self.si_x = np.append( list( self.si_x ), [0] )
-			
-        else :
-            self.phi = X
+        self.phi = np.copy(X)    # phi = feature values
+        self.t = np.copy(y)      # t = target values
         
         self.labels = np.array( X_labels )
-
-        n_basis_functions = self.phi.shape[1]
-
-        self.y = y
-
         self.alpha_ = self.alpha * np.ones(n_basis_functions)
         self.beta_ = self.beta
-
         self.m_ = np.zeros(n_basis_functions)
-
         self.alpha_old = self.alpha_
         
+        # rescale features and targets to zero mean
+        # and unit variance
+        if standardise :
+            
+            self.mu_x = np.mean( self.phi, axis=0 )
+            self.si_x = np.std( self.phi, axis=0 )
+            
+            self.phi -= np.tile( self.mu_x, X.shape[0] ).reshape( X.shape )
+            self.phi /= np.tile( self.si_x, X.shape[0] ).reshape( X.shape )
+            
+            self.mu_y = np.mean( self.t )
+            self.si_y = np.std( self.t )
+            
+            self.t -= np.tile( self.mu_y, len(y) )
+            self.t /= np.tile( self.si_y, len(y) )
+      
         if self.verbose :
             print "Fit: beginning with {} candidate terms".format( n_basis_functions )
             print "Fit: {}\n".format( X_labels )
             
-
+        # begin iterative type-2 maximum likelihood
+        # estimation for hyperpriors
         for i in range(self.n_iter):
 			
             self._posterior()
-
             self.gamma = 1 - self.alpha_ * np.diag( self.sigma_ )
             self.alpha_ = self.gamma / ( self.m_ ** 2 )
 
             if not self.beta_fixed:
                 self.beta_ = ( n_samples - np.sum( self.gamma ) ) / (
-                    np.sum( ( y - np.dot( self.phi, self.m_ ) ) ** 2 ) )
+                    np.sum( ( self.t - np.dot( self.phi, self.m_ ) ) ** 2 ) )
 
             self._prune()
             
@@ -215,12 +196,15 @@ class BaseRVM(BaseEstimator):
 
             if delta < self.tol and i > 1 :
                 
+                print "Fit: delta= {}".format( delta )
                 print "Fit: delta < tol @ iteration {}, finished.".format(i)
                 print "Fit: weights of each term:"
                 for n, label in enumerate( self.labels ) :
-                    print "{} : {} ".format( label, self.m_[n] )
-                if standardise :
-                    print "Fit: weights (rescaled) {}".format( self.m_ / self.si_x )
+                    
+                    if standardise :
+                        print "{} : {}".format( label, self.m_[n] * self.si_y / self.si_x[n] )
+                    else :
+                        print "{} : {}".format( label, self.m_[n] )
                     
                 # make vector indicating which basis functions remain
                 self.retained_ = np.isin( np.array( X_labels ), self.labels )
@@ -244,7 +228,7 @@ class RVR(BaseRVM, RegressorMixin):
         """Compute the posterior distriubtion over weights."""
         i_s = np.diag( self.alpha_ ) + self.beta_ * np.dot( self.phi.T, self.phi )
         self.sigma_ = np.linalg.inv(i_s)
-        self.m_ = self.beta_ * np.dot( self.sigma_, np.dot( self.phi.T, self.y ) )
+        self.m_ = self.beta_ * np.dot( self.sigma_, np.dot( self.phi.T, self.t ) )
 
     def post_pred_var(self, X ):
         """Evaluate the posterior predictive variance
@@ -271,5 +255,43 @@ class RVR(BaseRVM, RegressorMixin):
             var[i] = ( 1/self.beta_ ) + np.dot( phi[i,:], np.dot( self.sigma_, phi[i,:].T ) )
         
         return var
-            
+    
+    def score_MSE(self, X_test, y_test ):
+        """ Calculate mean-squared error (MSE)
+        between the true values of y and the 
+        predicted values using X_test
+        """
+        
+        # remove basis functions/features that were
+        # pruned during training from X
+        phi = X_test[:,self.retained_]
+        
+        if self.standardise :
+            y_pred = np.dot( phi, self.m_ * self.si_y / self.si_x )
+        else :
+            y_pred = np.dot( phi, self.m_ )
+        
+        MSE = np.mean( np.square( y_test - y_pred ) )
+        
+        return MSE
+    
+    def score_R2(self, X_test, y_test ):
+        """ Calculate coefficient of determination
+        between the true values of y and the 
+        predicted values using X_test
+        """
+        
+        # remove basis functions/features that were
+        # pruned during training from X
+        phi = X_test[:,self.retained_]
+        
+        if self.standardise :
+            y_pred = np.dot( phi, self.m_ * self.si_y / self.si_x )
+        else :
+            y_pred = np.dot( phi, self.m_ )
+        
+        R2 = r2_score( y_test, y_pred )
+        
+        return R2
+
 
