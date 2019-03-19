@@ -198,6 +198,7 @@ class BaseRVM(BaseEstimator):
                 
                 print "Fit: delta= {}".format( delta )
                 print "Fit: delta < tol @ iteration {}, finished.".format(i)
+                print "Fit: {} out of {} candidate terms.".format( len(self.m_), n_basis_functions )
                 print "Fit: weights of each term:"
                 for n, label in enumerate( self.labels ) :
                     
@@ -208,6 +209,7 @@ class BaseRVM(BaseEstimator):
                     
                 # make vector indicating which basis functions remain
                 self.retained_ = np.isin( np.array( X_labels ), self.labels )
+                self.n_retained = np.sum( self.retained_ )
             
                 break
 
