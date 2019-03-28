@@ -193,18 +193,20 @@ class BaseRVM(BaseEstimator):
               
 			# check if threshold has been reached
             delta = np.amax( np.absolute( self.alpha_ - self.alpha_old ) )
-
+            
             if delta < self.tol and i > 1 :
                 
                 print "Fit: delta= {}".format( delta )
                 print "Fit: delta < tol @ iteration {}, finished.".format(i)
                 print "Fit: {} out of {} candidate terms.".format( len(self.m_), n_basis_functions )
-                print "Fit: weights of each term:"
-                for n, label in enumerate( self.labels ) :
-                    
-                    if standardise :
-                        print "{} : {}".format( label, self.m_[n] * self.si_y / self.si_x[n] )
-                    else :
+                
+                if standardise :
+                    print "Fit: rescaled weights (+ un-scaled weights) of each term:"
+                    for n, label in enumerate( self.labels ) :
+                        print "{} : {} ({})".format( label, self.m_[n] * self.si_y / self.si_x[n], self.m_[n] )
+                else :
+                    print "Fit: regression weights of each term:"
+                    for n, label in enumerate( self.labels ) :
                         print "{} : {}".format( label, self.m_[n] )
                     
                 # make vector indicating which basis functions remain
