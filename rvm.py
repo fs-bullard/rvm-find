@@ -259,6 +259,21 @@ class RVR(BaseRVM, RegressorMixin):
             var[i] = ( 1/self.beta_ ) + np.dot( phi[i,:], np.dot( self.sigma_, phi[i,:].T ) )
         
         return var
+        
+    def predict(self, X) :
+        """
+        Make predictions for y using X.
+	    """
+        # remove basis functions/features that were
+        # pruned during training from X
+        phi = X[:,self.retained_]
+        
+        if self.standardise :
+            y_pred = np.dot( phi, self.m_ * self.si_y / self.si_x )
+        else :
+            y_pred = np.dot( phi, self.m_ )
+            
+        return y_pred
     
     def score_MSE(self, X_test, y_test ):
         """ Calculate mean-squared error (MSE)
