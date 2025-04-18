@@ -164,8 +164,8 @@ class BaseRVM(BaseEstimator):
             self.t /= np.tile( self.si_y, len(y) )
       
         if self.verbose :
-            print "Fit: beginning with {} candidate terms".format( n_basis_functions )
-            print "Fit: {}\n".format( X_labels )
+            print("Fit: beginning with {} candidate terms".format( n_basis_functions ))
+            print("Fit: {}\n".format( X_labels ))
             
         # begin iterative type-2 maximum likelihood
         # estimation for hyperpriors
@@ -183,31 +183,31 @@ class BaseRVM(BaseEstimator):
             
 			# print results of this iteration
             if self.verbose and ( (i+1) % self.verb_freq == 0 ):
-                print "Fit @ iteration {}:".format(i) 
-                print "--Alpha {}".format( self.alpha_ )
-                print "--Beta {}".format( self.beta_ ) 
-                print "--Gamma {}".format( self.gamma ) 
-                print "--m {}".format( self.m_ ) 
-                print "--# of relevance vectors {} / {}".format( self.phi.shape[1], n_basis_functions ) 
-                print "--Remaining candidate terms {}\n".format( list( self.labels ) )
+                print("Fit @ iteration {}:".format(i)) 
+                print("--Alpha {}".format( self.alpha_ ))
+                print("--Beta {}".format( self.beta_ ) )
+                print("--Gamma {}".format( self.gamma ) )
+                print("--m {}".format( self.m_ ) )
+                print("--# of relevance vectors {} / {}".format( self.phi.shape[1], n_basis_functions ) )
+                print("--Remaining candidate terms {}\n".format( list( self.labels ) ))
               
 			# check if threshold has been reached
             delta = np.amax( np.absolute( self.alpha_ - self.alpha_old ) )
             
             if delta < self.tol and i > 1 :
                 
-                print "Fit: delta= {}".format( delta )
-                print "Fit: delta < tol @ iteration {}, finished.".format(i)
-                print "Fit: {} out of {} candidate terms.".format( len(self.m_), n_basis_functions )
+                print("Fit: delta= {}".format( delta ))
+                print("Fit: delta < tol @ iteration {}, finished.".format(i))
+                print("Fit: {} out of {} candidate terms.".format( len(self.m_), n_basis_functions ))
                 
                 if standardise :
-                    print "Fit: rescaled weights (+ un-scaled weights) of each term:"
+                    print("Fit: rescaled weights (+ un-scaled weights) of each term:")
                     for n, label in enumerate( self.labels ) :
-                        print "{} : {} ({})".format( label, self.m_[n] * self.si_y / self.si_x[n], self.m_[n] )
+                        print("{} : {} ({})".format( label, self.m_[n] * self.si_y / self.si_x[n], self.m_[n] ))
                 else :
-                    print "Fit: regression weights of each term:"
+                    print("Fit: regression weights of each term:")
                     for n, label in enumerate( self.labels ) :
-                        print "{} : {}".format( label, self.m_[n] )
+                        print("{} : {}".format( label, self.m_[n] ))
                     
                 # make vector indicating which basis functions remain
                 self.retained_ = np.isin( np.array( X_labels ), self.labels )
